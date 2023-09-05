@@ -1,0 +1,43 @@
+// Variables
+bool FromFile = true; /*!< True if the positions is from a File */
+std::string file_users = "teste/Sim/User_1000_Sim18.csv"; /*!< File that set *X* and *Y* of the users */
+// std::string file_gateway = "teste/Sim/gw_1000_Best_Sim18.csv"; /*!< x (tab) y */
+std::string file_gateway = "teste/gw.txt";
+
+
+
+	} else {
+		gateways.Create ( getFileSize(file_gateway) );
+		// Get Gateway positions from File
+		std::ifstream infile2(file_gateway);
+		double gwa, gwb;
+		while(infile2 >> gwa >> gwb)
+		{
+//			cout << "Gx: " << gwa*1000 << ", Gy: "<< gwb*1000 << endl;
+//			allocator->Add (Vector (gwa,gwb,15.0));
+			allocator->Add (Vector (gwa,gwb,15.0));
+		}
+		infile2.close();
+	}
+
+        
+        
+        
+        /**
+ *    @name     getFileSize
+ *    @brief    Read line by line and increment to calculate the number of line
+ *    @param    std::string &fileName Name_of_File
+ *    @date     05/23/19
+ *    @todo     None 
+ *    @bug      None
+ *    @return   (int) how many lines the file has
+ */
+        int getFileSize(const std::string &fileName)
+        {
+          int numLines = 0;
+          std::string unused;
+          std::ifstream file(fileName.c_str());
+          while ( std::getline(file, unused) )
+            ++numLines;
+          return numLines;
+        }
