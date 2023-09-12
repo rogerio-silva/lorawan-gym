@@ -21,76 +21,73 @@
  */
 #include "lorawan-rl.h"
 
-namespace ns3 {
-namespace lorawan {
+namespace ns3
+{
+namespace lorawan
+{
 
 NS_LOG_COMPONENT_DEFINE("ns3::LorawanRl");
 NS_OBJECT_ENSURE_REGISTERED(LorawanRl);
 
-TypeId LorawanRl::GetTypeId(void)
+TypeId
+LorawanRl::GetTypeId(void)
 {
     NS_LOG_UNCOND("LorawanRl::GetTypeId");
     static TypeId tid = TypeId("ns3::LorawanRl")
                             .SetParent<NetworkStatus>()
                             .SetGroupName("lorawan")
                             .AddConstructor<LorawanRl>()
-                            .AddAttribute("Reward", "Reward",
+                            .AddAttribute("Reward",
+                                          "Reward",
                                           DoubleValue(0.0),
                                           MakeDoubleAccessor(&LorawanRl::m_reward),
-                                          MakeDoubleChecker<double> ());
-
-
+                                          MakeDoubleChecker<double>())
+                            .AddAttribute("Duration",
+                                          "Simulation Duration. Default: 10000ms",
+                                          TimeValue(MilliSeconds(10000)),
+                                          MakeTimeAccessor(&LorawanRl::m_duration),
+                                          MakeTimeChecker())
+                            .AddAttribute("StepTime",
+                                          "Step interval used in TCP env. Default: 100ms",
+                                          TimeValue(MilliSeconds(100)),
+                                          MakeTimeAccessor(&LorawanRl::m_timeStep),
+                                          MakeTimeChecker());
     return tid;
 }
 
-//.AddAttribute ("Duration",
-//              "Simulation Duration. Default: 10000ms",
-//              TimeValue (MilliSeconds (10000)),
-//              MakeTimeAccessor (&LorawanRl::m_duration),
-//              MakeTimeChecker ())
-//    .AddAttribute ("StepTime",
-//                  "Step interval used in TCP env. Default: 100ms",
-//                  TimeValue (MilliSeconds (100)),
-//                  MakeTimeAccessor (&LorawanRl::m_timeStep),
-//                  MakeTimeChecker ())
-//    .AddAttribute ("Reward", "Reward for increasing congestion window.",
-//                  DoubleValue (1.0),
-//                  MakeDoubleAccessor (&LorawanRl::m_reward),
-//                  MakeDoubleChecker<double> ())
-
 TypeId
-LorawanRl::GetInstanceTypeId () const
+LorawanRl::GetInstanceTypeId() const
 {
-    NS_LOG_FUNCTION (this);
-    return LorawanRl::GetTypeId ();
+    NS_LOG_FUNCTION(this);
+    return LorawanRl::GetTypeId();
 }
 
-LorawanRl::LorawanRl(void)
+LorawanRl::LorawanRl() : NetworkStatus()
 {
-    NS_LOG_FUNCTION (this);
-//    std::cout << "TimeStep: " << m_timeStep << ", Duration: " << m_duration << std::endl;
-//    std::cout << "Net Status(# devices): " << m_network_statuses.CountEndDevices() << std::endl;
-
+    NS_LOG_FUNCTION(this);
+    m_gym_env = nullptr;
+    m_network_statuses = nullptr;
 }
 
 LorawanRl::~LorawanRl()
 {
-    NS_LOG_FUNCTION (this);
+    NS_LOG_FUNCTION(this);
+    m_gym_env = nullptr;
+    m_network_statuses = nullptr;
 }
 
 std::string
-LorawanRl::GetName () const
+LorawanRl::GetName() const
 {
-    NS_LOG_FUNCTION (this);
+    NS_LOG_FUNCTION(this);
     return "LorawanRl";
 }
 
 void
 LorawanRl::CreateGymEnv()
 {
-    NS_LOG_FUNCTION (this);
+    NS_LOG_FUNCTION(this);
 }
 
-
-} //namespace lorawan
+} // namespace lorawan
 } // namespace ns3

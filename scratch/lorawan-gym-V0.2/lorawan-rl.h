@@ -22,6 +22,7 @@
 
 #include "ns3/core-module.h"
 #include "ns3/network-status.h"
+#include "lorawan-rl-env.h"
 
 #ifndef LORAWAN_RL_H
 #define LORAWAN_RL_H
@@ -50,7 +51,8 @@ class LorawanRl : public NetworkStatus
     Time m_timeStep;
     float m_reward {1.0};
 
-    NetworkStatus m_network_statuses;
+    Ptr<NetworkStatus> m_network_statuses;
+    Ptr<LorawanGymEnv> m_gym_env;
 };
 
 } /* namespace lorawan */
