@@ -41,6 +41,29 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("LoRaWAN-OpenAIGym");
 
+enum PacketOutcome
+{
+    _RECEIVED,
+    _INTERFERED,
+    _NO_MORE_RECEIVERS,
+    _UNDER_SENSITIVITY,
+    _UNSET
+};
+
+struct myPacketStatus
+{
+    Ptr<const Packet> packet;
+    uint32_t senderId;
+    uint32_t receiverId;
+    Time sentTime;
+    Time receivedTime;
+    uint8_t senderSF;
+    uint8_t receiverSF;
+    double senderTP;
+    double receiverTP;
+    uint32_t outcomeNumber;
+    std::vector<enum PacketOutcome> outcomes;
+};
 
 Ptr<LoraChannel> channel;
 MobilityHelper mobilityED;
@@ -52,8 +75,8 @@ NodeContainer endDevices;
 NodeContainer gateways;
 
 
-int nDevices = 0;
-int nGateways = 0;
+uint32_t nDevices = 0;
+uint32_t nGateways = 0;
 
 int noMoreReceivers = 0;
 int interfered = 0;
@@ -78,7 +101,7 @@ CheckReceptionByAllGWsComplete(std::map<Ptr<const Packet>, myPacketStatus>::iter
     {
         // Update the statistics
         myPacketStatus status = (*it).second;
-        for (int j = 0; j < nGateways; j++)
+        for (uint32_t j = 0; j < nGateways; j++)
         {
             switch (status.outcomes.at(j))
             {
@@ -260,6 +283,9 @@ main(int argc, char* argv[])
     bool verbose = true;
     bool up = true;
 
+    bool printRates = true;
+    double mean_qos = 0.0;
+
     CommandLine cmd;
     cmd.AddValue("openGymPort", "Port number for OpenGym env. Default: 5555", openGymPort);
     cmd.AddValue("nDevices", "Number of end devices to include in the simulation", nDevices);
@@ -394,9 +420,9 @@ main(int argc, char* argv[])
 
     // Inicia todos os UAVs
     Ptr<ListPositionAllocator> uavs_positions = CreateObject<ListPositionAllocator>();
-    for (int i = 0; i < nGateways; i++)
+    for (uint32_t i = 0; i < nGateways; i++)
     {
-        uavs_positions->Add(Vector(5000,5000,30));
+        uavs_positions->Add(Vector (6000,7000,30));
     }
 
     mobilityGW.SetMobilityModel("ns3::ConstantPositionMobilityModel");
@@ -418,13 +444,13 @@ main(int argc, char* argv[])
 //        Ptr<NetDevice> netDevice = object->GetDevice(0);
 //        Ptr<MobilityModel> gwMob = (*j)->GetObject<MobilityModel>();
 //        Vector position = gwMob->GetPosition();
-//        position = Vector (5000,5000,30);
+//        position = Vector (6500,7000,30);
 //        gwMob->SetPosition(position);
 //    }
 
-    Ptr<OpenGymInterface> openGymInterface = CreateObject<OpenGymInterface>(openGymPort);
-    Ptr<MyGymEnv> myGymEnv = CreateObject<MyGymEnv>(gateways);
-    myGymEnv->SetOpenGymInterface(openGymInterface);
+//    Ptr<OpenGymInterface> openGymInterface = CreateObject<OpenGymInterface>(openGymPort);
+//    Ptr<MyGymEnv> myGymEnv = CreateObject<MyGymEnv>(gateways);
+//    myGymEnv->SetOpenGymInterface(openGymInterface);
 
     // Configura os traces
     for (NodeContainer::Iterator g = gateways.Begin(); g != gateways.End(); ++g)
@@ -450,6 +476,9 @@ main(int argc, char* argv[])
 //        Config::ConnectWithoutContext(oss.str(), MakeBoundCallback(CollectCommData, myGymEnv));
     }
 
+    // Force ADR
+    ns3::lorawan::LorawanMacHelper::SetSpreadingFactorsUp(endDevices, gateways, channel);
+
     /**************************
      *  Create Network Server  *
      ***************************/
@@ -467,10 +496,6 @@ main(int argc, char* argv[])
     /*********************************************
      *  Install applications on the end devices  *
      *********************************************/
-
-    // Force ADR
-    ns3::lorawan::LorawanMacHelper::SetSpreadingFactorsUp(endDevices, gateways, channel);
-
     // Force send packets
     PeriodicSenderHelper periodicSenderHelper;
     periodicSenderHelper.SetPeriod(Seconds(envStepTime));
@@ -482,7 +507,6 @@ main(int argc, char* argv[])
 
     applicationContainer.Start(Seconds(0));
     applicationContainer.Stop(Seconds(simulationTime));
-
 
     NS_LOG_DEBUG("Completed configuration");
 
@@ -516,8 +540,6 @@ main(int argc, char* argv[])
      * Devices data
      * **/
 
-        bool printRates = false;
-        double mean_qos = 0.0;
 //        uint32_t nDevices = endDevices.GetN();
         // i:: device, j[0] sf j[1] data rate j[2] delay
         std::vector<std::vector<double>> deviceData;
@@ -567,6 +589,7 @@ main(int argc, char* argv[])
             deviceSimulatedData[devID][1].push_back(rk);
             deviceSimulatedData[devID][2].push_back(dk);
         }
+
         std::vector<std::vector<double>> deviceSummarizedData;
         sumQos = 0.0;
         for (uint32_t devID = 0; devID < nDevices; ++devID)
@@ -619,8 +642,8 @@ main(int argc, char* argv[])
             std::cout << "Total: " << numPackets << " Sent: " << sent << " Lost: " << _lost
                       << " Received: " << _received << " QoS: " << (isNaN(mean_qos)?0.0:mean_qos) << std::endl;
         }
-        myGymEnv->SetQoS(isNaN(mean_qos)?0.0:mean_qos);
-        myGymEnv->Notify();
+//        myGymEnv->SetQoS(isNaN(mean_qos)?0.0:mean_qos);
+//        myGymEnv->Notify();
 //    }
 //    myGymEnv->CollectCommData(myGymEnv,endDevices, packetTracker,sent);
 //    myGymEnv->NotifySimulationEnd();

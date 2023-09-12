@@ -109,7 +109,7 @@ MyGymEnv::GetObservationSpace()
      * O espaço de observação conterá as posições dos UAVs (x,y,z)
      * Inicialmente a posição z será fixa em 30 e o identificador do drone
      * que está que será posicionado.
-     * <drone: int, position: {x,y} // ,z}
+     * <drone: int, position: {x,y,z}
      * **/
     NS_LOG_FUNCTION(this);
     uint low = 0;

@@ -43,34 +43,8 @@
 #define UAV_ALTITUDE 30.0
 #define MOVEMENT_STEP 1000.0
 
-
-
 namespace ns3
 {
-
-enum PacketOutcome
-{
-    _RECEIVED,
-    _INTERFERED,
-    _NO_MORE_RECEIVERS,
-    _UNDER_SENSITIVITY,
-    _UNSET
-};
-
-struct myPacketStatus
-{
-    Ptr<const Packet> packet;
-    uint32_t senderId;
-    uint32_t receiverId;
-    Time sentTime;
-    Time receivedTime;
-    uint8_t senderSF;
-    uint8_t receiverSF;
-    double senderTP;
-    double receiverTP;
-    int outcomeNumber;
-    std::vector<enum PacketOutcome> outcomes;
-};
 
 class MyGymEnv : public OpenGymEnv
 {
