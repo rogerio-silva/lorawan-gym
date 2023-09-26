@@ -20,9 +20,15 @@
  * Based on: <https://github.com/20kaushik02/TCP-RL> (c) Kaushik Narayan R
  */
 
+#include "ns3/constant-velocity-helper.h"
+#include "ns3/gateway-lora-phy.h"
 #include "ns3/core-module.h"
 #include "ns3/mobility-model.h"
 #include "lorawan-rl-env.h"
+#include "ns3/node-list.h"
+#include "ns3/node-container.h"
+#include "ns3/box.h"
+
 
 #ifndef LORAWAN_RL_H
 #define LORAWAN_RL_H
@@ -43,18 +49,33 @@ class LorawanRl : public MobilityModel
 
     LorawanRl ();
     ~LorawanRl ();
-
+    void GetGateways();
+    void GetDevices();
     // From mobility model
-    void Start();
-    void DoMove();
+    void FindNewPosition(uint32_t action);
+    void DoMove(Vector position);
     Vector DoGetPosition() const override;
     void DoSetPosition(const Vector& position) override;
     Vector DoGetVelocity() const override;
-
     virtual std::string GetName () const;
+  protected:
+    virtual void CreateGymEnv();
+    void ConnectTraceCallbacks();
+
+    Ptr<LorawanGymEnv> m_lorawanGymEnv;
+    Ptr<LorawanRl> m_model;
 
   private:
     Vector m_position;
+    double m_movement_step = 1000.0; // step to a new position
+    Box m_bounds; //!< bounding box
+    double m_reward = 0.0;
+    Time m_timeStep;
+    NodeContainer m_gateways;
+    NodeContainer m_devices;
+    uint32_t m_number_of_devices = 0;
+    uint32_t m_number_of_gateways = 0;
+    bool m_simulation_time = false;
 
 };
 

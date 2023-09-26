@@ -468,12 +468,12 @@ main(int argc, char* argv[])
                                           MakeCallback(&NoMoreReceiversCallback));
         gwPhy->TraceConnectWithoutContext("LostPacketBecauseUnderSensitivity",
                                           MakeCallback(&UnderSensitivityCallback));
-//        std::ostringstream oss;
-//        oss.str("");
-//        // "/NodeList/7/$ns3::MobilityModel/CourseChange"
-//        oss << "/NodeList/" << object->GetId() << "/$ns3::MobilityModel/CourseChange";
-//        std::cout << oss.str() << std::endl;
-//        Config::ConnectWithoutContext(oss.str(), MakeBoundCallback(CollectCommData, myGymEnv));
+        std::ostringstream oss;
+        oss.str("");
+        // "/NodeList/7/$ns3::MobilityModel/CourseChange"
+        oss << "/NodeList/" << object->GetId() << "/$ns3::MobilityModel/CourseChange";
+        std::cout << oss.str() << std::endl;
+        Config::ConnectWithoutContext(oss.str(), MakeBoundCallback(CollectCommData, myGymEnv));
     }
 
     // Force ADR

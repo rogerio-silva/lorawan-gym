@@ -22,9 +22,9 @@
 
 #include "lorawan-rl-env.h"
 
+#include "ns3/lora-tag.h"
+
 namespace ns3
-{
-namespace lorawan
 {
 
 NS_LOG_COMPONENT_DEFINE("ns3::LorawanGymEnv");
@@ -42,49 +42,47 @@ LorawanGymEnv::~LorawanGymEnv()
 }
 
 void
-LorawanGymEnv::ScheduleNextStateRead ()
+LorawanGymEnv::ScheduleNextStateRead()
 {
-    NS_LOG_FUNCTION (this);
-    Simulator::Schedule (m_timeStep, &LorawanGymEnv::ScheduleNextStateRead, this);
+    NS_LOG_FUNCTION(this);
+    Simulator::Schedule(Seconds(0), &LorawanGymEnv::ScheduleNextStateRead, this);
     Notify();
 }
 
 TypeId
-LorawanGymEnv::GetTypeId (void)
+LorawanGymEnv::GetTypeId(void)
 {
     NS_LOG_UNCOND("LorawanGymEnv::GetTypeId");
-    static TypeId tid = TypeId ("ns3::TcpGymEnv")
-                            .SetParent<OpenGymEnv> ()
-                            .SetGroupName ("OpenGym")
-        ;
+    static TypeId tid =
+        TypeId("ns3::LorawanGymEnv").SetParent<OpenGymEnv>().SetGroupName("OpenGym");
     return tid;
 }
 
 void
-LorawanGymEnv::DoDispose ()
+LorawanGymEnv::DoDispose()
 {
-    NS_LOG_FUNCTION (this);
+    NS_LOG_FUNCTION(this);
 }
 
 void
-LorawanGymEnv::SetDuration(Time value)
+LorawanGymEnv::SetDuration(Time duration)
 {
-    NS_LOG_FUNCTION (this);
-    m_duration = value;
+    NS_LOG_FUNCTION(this);
+    m_duration = duration;
 }
 
 void
-LorawanGymEnv::SetTimeStep(Time value)
+LorawanGymEnv::SetUAVMovementStep(double step)
 {
-    NS_LOG_FUNCTION (this);
-    m_timeStep = value;
+    NS_LOG_FUNCTION(this);
+    m_UAV_MovementStep = step;
 }
 
 void
-LorawanGymEnv::SetReward(double value)
+LorawanGymEnv::SetReward(double reward)
 {
-    NS_LOG_FUNCTION (this);
-    m_reward = value;
+    NS_LOG_FUNCTION(this);
+    m_reward = reward;
 }
 
 /*
@@ -109,7 +107,7 @@ Define game over condition
 bool
 LorawanGymEnv::GetGameOver()
 {
-    NS_LOG_UNCOND ("MyGetGameOver: " << m_isGameOver);
+    NS_LOG_UNCOND("MyGetGameOver: " << m_isGameOver);
     return m_isGameOver;
 }
 
@@ -142,7 +140,7 @@ LorawanGymEnv::ExecuteActions(Ptr<OpenGymDataContainer> action)
     Ptr<OpenGymDiscreteContainer> discrete = DynamicCast<OpenGymDiscreteContainer>(action);
     m_action = discrete->GetValue();
 
-    NS_LOG_UNCOND ("MyExecuteActions: " << action);
+    NS_LOG_UNCOND("MyExecuteActions: " << action);
     return true;
 }
 
@@ -150,31 +148,273 @@ Ptr<OpenGymDataContainer>
 LorawanGymEnv::GetObservation()
 {
     uint32_t parameterNum = 7;
-    std::vector<uint32_t> shape = {parameterNum,};
-    Ptr<OpenGymBoxContainer<uint32_t> > box = CreateObject<OpenGymBoxContainer<uint32_t> >(shape);
+    std::vector<uint32_t> shape = {
+        parameterNum,
+    };
+    Ptr<OpenGymBoxContainer<uint32_t>> box = CreateObject<OpenGymBoxContainer<uint32_t>>(shape);
     box->AddValue(m_uav_id);
     box->AddValue(m_uav_position.x);
     box->AddValue(m_uav_position.y);
     box->AddValue(m_uav_position.z);
-    box->AddValue(m_packets_sent);
-    box->AddValue(m_packets_received);
+    box->AddValue(m_pkt_transmitted);
+    box->AddValue(m_pkt_received);
     box->AddValue(m_qos);
 
-    NS_LOG_UNCOND ("MyGetObservation: " << box);
+    NS_LOG_UNCOND("MyGetObservation: " << box);
     return box;
 }
 
-Ptr<OpenGymSpace> GetObservationSpace(){
+Ptr<OpenGymSpace>
+LorawanGymEnv::GetObservationSpace()
+{
     uint32_t parameterNum = 7;
+    std::vector<uint32_t> shape = {
+        parameterNum,
+    };
     float low = 0.0;
     float high = 1000000000.0;
-    std::vector<uint32_t> shape = {parameterNum,};
-    std::string dType = TypeNameGet<uint64_t> ();
+    std::string dtype = TypeNameGet<uint32_t>();
 
-    Ptr<OpenGymBoxSpace> box = CreateObject<OpenGymBoxSpace> (low, high, shape, dType);
-    NS_LOG_UNCOND ("MyGetObservationSpace: " << box);
+    Ptr<OpenGymBoxSpace> box = CreateObject<OpenGymBoxSpace>(low, high, shape, dtype);
+    NS_LOG_INFO("MyGetObservationSpace: " << box);
     return box;
 }
 
-} // namespace lorawan
+/**
+ * Packet tracing
+ * */
+
+void
+LorawanGymEnv::PktTrace(Ptr<const Packet> packet, uint32_t systemId)
+{
+    NS_LOG_UNCOND("Packet Tracer!");
+}
+
+void
+LorawanGymEnv::CheckReceptionByAllGWsComplete(
+    std::map<Ptr<const Packet>, myPacketStatus>::iterator it)
+{
+    // Check whether this packet is received by all gateways
+    if ((*it).second.outcomeNumber == m_number_of_gateways)
+    {
+        // Update the statistics
+        myPacketStatus status = (*it).second;
+        for (uint32_t j = 0; j < m_number_of_gateways; j++)
+        {
+            switch (status.outcomes.at(j))
+            {
+            case _RECEIVED: {
+                m_pkt_received += 1;
+                break;
+            }
+            case _UNDER_SENSITIVITY: {
+                m_pkt_underSensitivity += 1;
+                break;
+            }
+            case _NO_MORE_RECEIVERS: {
+                m_pkt_noMoreReceivers += 1;
+                break;
+            }
+            case _INTERFERED: {
+                m_pkt_interfered += 1;
+                break;
+            }
+            case _UNSET: {
+                break;
+            }
+            }
+        }
+        // Remove the packet from the tracker
+        //              packetTracker.erase (it);
+    }
+}
+
+void
+LorawanGymEnv::TransmissionCallback(Ptr<const Packet> packet,
+                                    uint32_t systemId,
+                                    Ptr<LorawanGymEnv> env)
+{
+    NS_LOG_INFO("Transmitted a packet from device " << systemId);
+    // Coleta informações sobre o pacote (SF, TP, etc.)
+    lorawan::LoraTag tag;
+    packet->PeekPacketTag(tag);
+
+    // Create a packetStatus
+    myPacketStatus status;
+    status.packet = packet;
+    status.senderId = systemId;
+    status.sentTime = Simulator::Now();
+    status.outcomeNumber = 0;
+    status.outcomes = std::vector<enum PacketOutcome>(m_number_of_gateways, _UNSET);
+    status.senderSF = tag.GetSpreadingFactor();
+
+    setMPacketTracker(std::pair<Ptr<const Packet>, myPacketStatus>(packet, status), env);
+    m_pkt_transmitted += 1;
+}
+
+void
+LorawanGymEnv::PacketReceptionCallback(Ptr<const Packet> packet,
+                                       uint32_t systemId,
+                                       Ptr<LorawanGymEnv> env)
+{
+    // Remove the successfully received packet from the list of sent ones
+    NS_LOG_INFO("A packet was successfully received at gateway " << systemId);
+
+    // Coleta informações sobre o pacote (SF, TP, etc.)
+    lorawan::LoraTag tag;
+    packet->PeekPacketTag(tag);
+
+    std::map<Ptr<const Packet>, myPacketStatus>::iterator it =
+        getMPacketTrackerIterator(env, packet);
+
+    if (it != getMPacketTrackerIteratorEnd(env))
+    {
+        if ((*it).second.outcomes.size() > systemId - m_number_of_devices)
+        {
+            // lembre que o ID do gateways é enumerado após todos os devices, logo numero sequencial
+            //  do GW é contado subtraindo o m_number_of_devices. Ainda que os pacotes originados do
+            //  mesmo device no mesmo instante é recebido pelos gateways na área de alcance, <e que
+            //  essas duplicidades são removidas pela CheckReceptionByAllGWsComplete> sem certeza
+            //  nisso
+            (*it).second.outcomes.at(systemId - m_number_of_devices) = _RECEIVED;
+            (*it).second.outcomeNumber += 1;
+            //      if ((*it).second.outcomeNumber == 1 || (*it).second.receivedTime == Seconds (0))
+            if ((*it).second.receivedTime == Seconds(0))
+            {
+                (*it).second.receivedTime = Simulator::Now();
+                (*it).second.receiverId = systemId;
+                //          cc++;
+            }
+            (*it).second.receiverSF = tag.GetSpreadingFactor();
+            (*it).second.receiverTP = tag.GetReceivePower();
+
+            CheckReceptionByAllGWsComplete(it);
+        }
+    }
+}
+
+void
+LorawanGymEnv::InterferenceCallback(Ptr<const Packet> packet,
+                                    uint32_t systemId,
+                                    Ptr<LorawanGymEnv> env)
+{
+    NS_LOG_INFO("A packet was lost because of interference at gateway " << systemId);
+
+    std::map<Ptr<const Packet>, myPacketStatus>::iterator it =
+        getMPacketTrackerIterator(env, packet);
+    if ((*it).second.outcomes.size() > systemId - m_number_of_devices)
+    {
+        (*it).second.outcomes.at(systemId - m_number_of_devices) = _INTERFERED;
+        (*it).second.outcomeNumber += 1;
+    }
+    CheckReceptionByAllGWsComplete(it);
+}
+
+void
+LorawanGymEnv::NoMoreReceiversCallback(Ptr<const Packet> packet,
+                                       uint32_t systemId,
+                                       Ptr<LorawanGymEnv> env)
+{
+    NS_LOG_INFO("A packet was lost because there were no more receivers at gateway " << systemId);
+
+    std::map<Ptr<const Packet>, myPacketStatus>::iterator it =
+        getMPacketTrackerIterator(env, packet);
+    if ((*it).second.outcomes.size() > systemId - m_number_of_devices)
+    {
+        (*it).second.outcomes.at(systemId - m_number_of_devices) = _NO_MORE_RECEIVERS;
+        (*it).second.outcomeNumber += 1;
+    }
+    CheckReceptionByAllGWsComplete(it);
+}
+
+void
+LorawanGymEnv::UnderSensitivityCallback(Ptr<const Packet> packet,
+                                        uint32_t systemId,
+                                        Ptr<LorawanGymEnv> env)
+{
+    NS_LOG_INFO("A packet arrived at the gateway under sensitivity" << systemId);
+
+    std::map<Ptr<const Packet>, myPacketStatus>::iterator it =
+        getMPacketTrackerIterator(env, packet);
+    if ((*it).second.outcomes.size() > systemId - m_number_of_devices)
+    {
+        (*it).second.outcomes.at(systemId - m_number_of_devices) = _UNDER_SENSITIVITY;
+        (*it).second.outcomeNumber += 1;
+    }
+    CheckReceptionByAllGWsComplete(it);
+}
+
+void
+LorawanGymEnv::RecalcularTudo(Ptr<LorawanGymEnv> env, Ptr<const MobilityModel> mob)
+{
+    NS_LOG_UNCOND("RecalcularTudo");
+}
+
+void
+LorawanGymEnv::setMNumberOfDevices(uint32_t mNumberOfDevices)
+{
+    m_number_of_devices = mNumberOfDevices;
+}
+
+void
+LorawanGymEnv::setMNumberOfGateways(uint32_t mNumberOfGateways)
+{
+    m_number_of_gateways = mNumberOfGateways;
+}
+
+void
+LorawanGymEnv::setMPktInterfered(int mPktInterfered)
+{
+    m_pkt_interfered = mPktInterfered;
+}
+
+void
+LorawanGymEnv::setMPktReceived(int mPktReceived)
+{
+    m_pkt_received = mPktReceived;
+}
+
+void
+LorawanGymEnv::setMPktUnderSensitivity(int mPktUnderSensitivity)
+{
+    m_pkt_underSensitivity = mPktUnderSensitivity;
+}
+
+void
+LorawanGymEnv::setMPktTransmitted(int mPktTransmitted)
+{
+    m_pkt_transmitted = mPktTransmitted;
+}
+
+void
+LorawanGymEnv::setMPktNoMoreReceivers(int mPktNoMoreReceivers)
+{
+    m_pkt_noMoreReceivers = mPktNoMoreReceivers;
+}
+
+const std::map<Ptr<const Packet>, LorawanGymEnv::myPacketStatus>::iterator
+LorawanGymEnv::getMPacketTrackerIterator(Ptr<LorawanGymEnv> env, Ptr<const Packet> packet)
+{
+    return env->m_packetTracker.find(packet);
+}
+
+const std::map<Ptr<const Packet>, LorawanGymEnv::myPacketStatus>::iterator
+LorawanGymEnv::getMPacketTrackerIteratorEnd(Ptr<LorawanGymEnv> env)
+{
+    return env->m_packetTracker.end();
+}
+
+const std::map<Ptr<const Packet>, LorawanGymEnv::myPacketStatus>::iterator
+LorawanGymEnv::getMPacketTrackerIteratorBegin(Ptr<LorawanGymEnv> env)
+{
+    return env->m_packetTracker.begin();
+}
+
+void
+LorawanGymEnv::setMPacketTracker(std::pair<Ptr<const Packet>, myPacketStatus> pair,
+                                 Ptr<LorawanGymEnv> env)
+{
+    env->m_packetTracker.insert(pair);
+}
+
 } // namespace ns3
