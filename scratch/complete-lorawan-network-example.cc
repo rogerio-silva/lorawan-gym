@@ -232,10 +232,10 @@ PrintEndDevicesPositions (NodeContainer endDevices, std::string filename)
     {
       Ptr<Node> object = *j;
       Ptr<MobilityModel> position = object->GetObject<MobilityModel> ();
-      NS_ASSERT (position != 0);
+      NS_ASSERT (position != nullptr);
       Ptr<NetDevice> netDevice = object->GetDevice (0);
       Ptr<LoraNetDevice> loraNetDevice = netDevice->GetObject<LoraNetDevice> ();
-      NS_ASSERT (loraNetDevice != 0);
+      NS_ASSERT (loraNetDevice != nullptr);
       Ptr<EndDeviceLorawanMac> mac = loraNetDevice->GetMac ()->GetObject<EndDeviceLorawanMac> ();
 //      int sf = int (mac->GetDataRate ());
       Vector pos = position->GetPosition ();
@@ -270,7 +270,7 @@ PrintEndDevicesParameters (NodeContainer endDevices, NodeContainer gateways, std
           NS_ASSERT (distanceFromGW != 0);
           Ptr<NetDevice> netDevice = oDevice->GetDevice (0);
           Ptr<LoraNetDevice> loraNetDevice = netDevice->GetObject<LoraNetDevice> ();
-          NS_ASSERT (loraNetDevice != 0);
+          NS_ASSERT (loraNetDevice != nullptr);
           Ptr<EndDeviceLorawanMac> mac =
               loraNetDevice->GetMac ()->GetObject<EndDeviceLorawanMac> ();
           int sf = mac->GetSfFromDataRate (mac->GetDataRate ());
@@ -515,7 +515,7 @@ main (int argc, char *argv[])
       // Get the device
       Ptr<NetDevice> netDevice = object->GetDevice (0);
       Ptr<LoraNetDevice> loraNetDevice = netDevice->GetObject<LoraNetDevice> ();
-      NS_ASSERT (loraNetDevice != 0);
+      NS_ASSERT (loraNetDevice != nullptr);
       Ptr<GatewayLoraPhy> gwPhy = loraNetDevice->GetPhy ()->GetObject<GatewayLoraPhy> ();
 
       // Set up height of the gateway

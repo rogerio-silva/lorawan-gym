@@ -58,7 +58,7 @@ NS_LOG_COMPONENT_DEFINE ("LoraHelper");
 
         // Create the PHY
         Ptr<LoraPhy> phy = phyHelper.Create (node, device);
-        NS_ASSERT (phy != 0);
+        NS_ASSERT (phy != nullptr);
         device->SetPhy (phy);
         NS_LOG_DEBUG ("Done creating the PHY");
 
@@ -105,7 +105,7 @@ NS_LOG_COMPONENT_DEFINE ("LoraHelper");
 
       // Create the MAC
       Ptr<LorawanMac> mac = macHelper.Create (node, device);
-      NS_ASSERT (mac != 0);
+      NS_ASSERT (mac != nullptr);
       mac->SetPhy (phy);
       NS_LOG_DEBUG ("Done creating the MAC");
       device->SetMac (mac);
@@ -218,10 +218,10 @@ LoraHelper::DoPrintDeviceStatus (NodeContainer endDevices, NodeContainer gateway
     {
       Ptr<Node> object = *j;
       Ptr<MobilityModel> position = object->GetObject<MobilityModel> ();
-      NS_ASSERT (position != 0);
+      NS_ASSERT (position != nullptr);
       Ptr<NetDevice> netDevice = object->GetDevice (0);
       Ptr<LoraNetDevice> loraNetDevice = netDevice->GetObject<LoraNetDevice> ();
-      NS_ASSERT (loraNetDevice != 0);
+      NS_ASSERT (loraNetDevice != nullptr);
       Ptr<ClassAEndDeviceLorawanMac> mac = loraNetDevice->GetMac ()->GetObject<ClassAEndDeviceLorawanMac> ();
       int dr = int(mac->GetDataRate ());
       double txPower = mac->GetTransmissionPower ();
@@ -356,14 +356,14 @@ LoraHelper::EnablePcapInternal (std::string prefix, Ptr<NetDevice> nd, bool prom
   // the system.  We can only deal with devices of type LoraNetDevice.
   //
   Ptr<LoraNetDevice> device = nd->GetObject<LoraNetDevice> ();
-  if (device == 0)
+  if (device == nullptr)
     {
       NS_LOG_INFO ("LoraHelper::EnablePcapInternal(): Device " << device << " not of type ns3::LoraNetDevice");
       return;
     }
 
   auto phy = device->GetPhy ();
-  NS_ABORT_MSG_IF (phy == 0, "LoRaHelper::EnablePcapInternal(): Phy layer in LoraNetDevice must be set");
+  NS_ABORT_MSG_IF (phy == nullptr, "LoRaHelper::EnablePcapInternal(): Phy layer in LoraNetDevice must be set");
 
   PcapHelper pcapHelper;
 

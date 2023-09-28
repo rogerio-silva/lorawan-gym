@@ -271,7 +271,7 @@ PrintEndDevicesParameters (std::string filename)
       Ptr<Node> oDevice = *ed;
       Ptr<NetDevice> netDevice = oDevice->GetDevice (0);
       Ptr<LoraNetDevice> loraNetDevice = netDevice->GetObject<LoraNetDevice> ();
-      NS_ASSERT (loraNetDevice != 0);
+      NS_ASSERT (loraNetDevice != nullptr);
       Ptr<EndDeviceLorawanMac> mac = loraNetDevice->GetMac ()->GetObject<EndDeviceLorawanMac> ();
       int sf = mac->GetSfFromDataRate (mac->GetDataRate ());
       int txPower = mac->GetTransmissionPower ();
