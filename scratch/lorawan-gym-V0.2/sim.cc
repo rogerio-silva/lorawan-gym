@@ -98,6 +98,8 @@ int received = 0;
 int underSensitivity = 0;
 int sent = 0;
 
+
+
 /**********************
  *  Global Callbacks  *
  **********************/
@@ -115,8 +117,8 @@ main(int argc, char* argv[])
 {
     // Parameters of the environment
     const int packetSize = 50;
-    double simulationTime = 10;
-    double envStepTime = 0.1; // seconds, ns3gym env step time interval
+    double simulationTime = 40;
+    double envStepTime = 1; // seconds, ns3gym env step time interval
     double stopTime = envStepTime + simulationTime;
     uint32_t seed = 1;
     uint32_t simSeed = 1;
@@ -130,7 +132,7 @@ main(int argc, char* argv[])
 
     bool printRates = true;
 
-    double rew = 1.0;
+//    double rew = 1.0;
 
     CommandLine cmd;
     cmd.AddValue("openGymPort", "Port number for OpenGym env. Default: 5555", openGymPort);
@@ -231,7 +233,7 @@ main(int argc, char* argv[])
     Ptr<ListPositionAllocator> uavs_positions = CreateObject<ListPositionAllocator>();
     for (uint32_t i = 0; i < nGateways; i++)
     {
-        uavs_positions->Add(Vector(6000, 7000, 30));
+        uavs_positions->Add(Vector(5000, 6500, 30));
     }
 
     mobilityGW.SetMobilityModel("ns3::ConstantPositionMobilityModel");
@@ -256,12 +258,12 @@ main(int argc, char* argv[])
     //        gwMob->SetPosition(position);
     //    }
 
-    Ptr<OpenGymInterface> openGymInterface = OpenGymInterface::Get(openGymPort);
-    Config::SetDefault("ns3::LorawanRl::StepTime",
-                       TimeValue(Seconds(envStepTime))); // Time step of env
-    Config::SetDefault("ns3::LorawanRl::Duration",
-                       TimeValue(Seconds(simulationTime))); // Duration of env sim
-    Config::SetDefault("ns3::LorawanRl::Reward", DoubleValue(rew)); // Reward
+//    Ptr<OpenGymInterface> openGymInterface = OpenGymInterface::Get(openGymPort);
+//    Config::SetDefault("ns3::LorawanRl::StepTime",
+//                       TimeValue(Seconds(envStepTime))); // Time step of env
+//    Config::SetDefault("ns3::LorawanRl::Duration",
+//                       TimeValue(Seconds(simulationTime))); // Duration of env sim
+//    Config::SetDefault("ns3::LorawanRl::Reward", DoubleValue(rew)); // Reward
 
     // Configura os traces
     for (NodeContainer::Iterator g = gateways.Begin(); g != gateways.End(); ++g)
@@ -293,7 +295,7 @@ main(int argc, char* argv[])
     networkServer.Create(1);
     NetworkServerHelper nsHelper = NetworkServerHelper();
     nsHelper.SetAdr("ns3::AdrComponent");
-    nsHelper.EnableAdr(true);
+    nsHelper.EnableAdr(false);
     nsHelper.SetEndDevices(endDevices);
     nsHelper.SetGateways(gateways);
     nsHelper.Install(networkServer);
@@ -330,7 +332,7 @@ main(int argc, char* argv[])
     if (printRates)
         PrintData();
 
-    openGymInterface->NotifySimulationEnd();
+//    openGymInterface->NotifySimulationEnd();
     Simulator::Destroy();
     NS_LOG_UNCOND("Simulation finished");
 }

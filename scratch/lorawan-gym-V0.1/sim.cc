@@ -299,7 +299,7 @@ main(int argc, char* argv[])
     cmd.Parse(argc, argv);
 
     NS_LOG_UNCOND("Ns3Env parameters:");
-    NS_LOG_UNCOND("--simulationTime: " << Seconds(simulationTime));
+    NS_LOG_UNCOND("--simulationTime: " << simulationTime);
     NS_LOG_UNCOND("--openGymPort: " << openGymPort);
     NS_LOG_UNCOND("--envStepTime: " << envStepTime);
     NS_LOG_UNCOND("--seed: " << simSeed);

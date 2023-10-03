@@ -1,6 +1,5 @@
 # LoRaWAN-UAV-RL
-## Packet Tracking on Lorawan-Rl.cc
-
+## ALL IN ONE FILE
 UAVs deployment in LoRaWAN networks with reinforcement learning.
 
 Paper: *Dynamic resources allocation on B5G mmWaves and non-3GPP IoT involving UAVs*
