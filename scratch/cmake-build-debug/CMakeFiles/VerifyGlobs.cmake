@@ -15,9 +15,13 @@ set(OLD_GLOB
   "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/gateways-density-oriented-distrib.cc"
   "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/mylorawan.cc"
   "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/optimal-distrib-experiment.cc"
+  "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/rem-example.cc"
   "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/scratch-simulator.cc"
   "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/thesis-experiments.cc"
   "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/uniform-distrib-experiment.cc"
+  "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/will_devices-density-oriented-distrib.cc"
+  "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/will_optimal-distrib-experiment.cc"
+  "/home/rogerio/git/ns-allinone-3.38/ns-3.38/scratch/will_thesis-experiment.cc"
   )
 if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   message("-- GLOB mismatch!")

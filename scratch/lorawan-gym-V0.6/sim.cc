@@ -47,6 +47,7 @@
 #include "ns3/simulator.h"
 #include "ns3/stats-module.h"
 #include "ns3/traced-value.h"
+#include "ns3/grid-scenario-helper.h"
 
 #include <iomanip>
 
@@ -133,6 +134,7 @@ ApplicationContainer applicationContainer;
 
 uint32_t nDevices = 0;
 uint32_t nGateways = 0;
+uint32_t ngNBs = 0;
 int pkt_noMoreReceivers = 0;
 int pkt_interfered = 0;
 int pkt_received = 0;
@@ -187,6 +189,7 @@ main(int argc, char* argv[])
     cmd.AddValue("openGymPort", "Port number for OpenGym env. Default: 5555", openGymPort);
     cmd.AddValue("nDevices", "Number of end devices to include in the simulation", nDevices);
     cmd.AddValue("nGateways", "Number of gateways to include in the simulation", nGateways);
+    cmd.AddValue("ngNBs", "Number of gNodeBs to include in the simulation", ngNBs);
     cmd.AddValue("verbose", "Whether to print output or not", verbose);
     cmd.AddValue("up", "Spread Factor UP", up);
     cmd.AddValue("simSeed", "Seed", simSeed);
@@ -220,10 +223,38 @@ main(int argc, char* argv[])
         //        LogComponentEnable("EndDeviceStatus", ns3::LOG_LEVEL_ALL);
         LogComponentEnable("LoRaWAN-OpenAIGym", ns3::LOG_LEVEL_ALL);
     }
+    /************************************
+     *  gNodeB Settings                *
+     ************************************/
+    NodeContainer gnbs;
+    int64_t randomStream = 1;
+    GridScenarioHelper gridScenario;
+    gridScenario.SetRows(1);
+    gridScenario.SetColumns(ngNBs);
+    gridScenario.SetHorizontalBsDistance(5.0);
+    gridScenario.SetVerticalBsDistance(5.0);
+    gridScenario.SetBsHeight(1.5);
+    gridScenario.SetUtHeight(1.5);
+    // must be set before BS number
+    gridScenario.SetSectorization(GridScenarioHelper::SINGLE);
+    gridScenario.SetBsNumber(ngNBs);
+    gridScenario.SetUtNumber(nGateways);
+    gridScenario.SetScenarioHeight(3); // Create a 3x3 scenario where the UE will
+    gridScenario.SetScenarioLength(3); // be distributed.
+    randomStream += gridScenario.AssignStreams(randomStream);
+    gridScenario.CreateScenario();
 
-    /************************
-     *  Create the channel  *
-     ************************/
+    Ptr<NrPointToPointEpcHelper> epcHelper = CreateObject<NrPointToPointEpcHelper>();
+    Ptr<IdealBeamformingHelper> idealBeamformingHelper = CreateObject<IdealBeamformingHelper>();
+    Ptr<NrHelper> nrHelper = CreateObject<NrHelper>();
+
+    // Put the pointers inside nrHelper
+    nrHelper->SetBeamformingHelper(idealBeamformingHelper);
+    nrHelper->SetEpcHelper(epcHelper);
+
+    /*****************************
+     *  Create the LoRa channel  *
+     *****************************/
     Ptr<LoraChannel> channel;
     MobilityHelper mobilityED;
     MobilityHelper mobilityGW;
@@ -234,9 +265,9 @@ main(int argc, char* argv[])
     loss->SetReference(1, 10.0);
     channel = CreateObject<LoraChannel>(loss, delay);
 
-    /************************
-     *  Create the helpers  *
-     ************************/
+    /****************************
+     *  Create the LoRa helpers *
+     ****************************/
     NS_LOG_INFO("Setting up helpers...");
     LoraPhyHelper phyHelper = LoraPhyHelper();
     phyHelper.SetChannel(channel);
@@ -244,11 +275,11 @@ main(int argc, char* argv[])
     LoraHelper helper = LoraHelper();
     helper.EnablePacketTracking();
 
-    /************************
-     *  Create End Devices  *
-     ************************/
-    NS_LOG_INFO("Creating end devices...");
-    // Create a set of nodes
+    /*****************************
+     *  Create LoRa End Devices  *
+     *****************************/
+    NS_LOG_INFO("Creating LoRa end devices...");
+    // Create a set of nodes according to positions file
     Ptr<ListPositionAllocator> allocatorED =
         EndDevicesPlacement("/home/rogerio/git/sim-res/"
                             "datafile/devices/placement/"
@@ -281,9 +312,9 @@ main(int argc, char* argv[])
         phy->TraceConnectWithoutContext("StartSending", MakeCallback(&TransmissionCallback));
     }
 
-    /*********************
-     *  Create Gateways  *
-     *********************/
+    /***************************
+     *  Create Gateways  (UAVs)*
+     ***************************/
     NS_LOG_INFO("Creating gateways...");
     gateways.Create(nGateways);
     Ptr<ListPositionAllocator> gatewaysPositions = GatewaysPlacement();
@@ -291,10 +322,14 @@ main(int argc, char* argv[])
     mobilityGW.SetPositionAllocator(gatewaysPositions);
     mobilityGW.Install(gateways);
 
-    // Create a net device for each gateway
+    // Create a LoRa net device (interface LoRa) for each gateway
     phyHelper.SetDeviceType(LoraPhyHelper::GW);
     macHelper.SetDeviceType(LorawanMacHelper::GW);
     helper.Install(phyHelper, macHelper, gateways);
+
+    // Create a NR net device (interface NR) for each gateway
+
+
 
     for (NodeContainer::Iterator g = gateways.Begin(); g != gateways.End(); ++g)
     {

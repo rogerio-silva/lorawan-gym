@@ -1,6 +1,6 @@
 # LoRaWAN-UAV-RL
 ## ALL IN ONE FILE
-## Functional version for LoRaWAN to UAVs communications with openAiGym (ns3Gym)
+### First attempt to LoRaWAN - UAV - gNB NR
 UAVs deployment in LoRaWAN networks with reinforcement learning.
 
 Paper: *Dynamic resources allocation on B5G mmWaves and non-3GPP IoT involving UAVs*

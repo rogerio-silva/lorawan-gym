@@ -19,6 +19,18 @@
  * Author: Rogério S. Silva <rogerio.sousa@ifg.edu.br>
  */
 
+/*
+ * #####################################################################################
+ *                              SIMULATION MODEL
+ * #####################################################################################
+ *                 LoRaWAN communication             5G sub6GHz communication
+ *    © © © © ©                              X X                              ((( ^
+ *     © © © © )))       NON3GPP         ((( |O| )))         3GPP                /X\
+ *   ©© © © ©                                X X                                /XXX\
+ * Devices Lorawan                           UAV                              BS 5G/B5G
+ * #####################################################################################
+ * */
+
 #include "mygym.h"
 #include "ns3/command-line.h"
 #include "ns3/core-module.h"
@@ -473,7 +485,7 @@ main(int argc, char* argv[])
         // "/NodeList/7/$ns3::MobilityModel/CourseChange"
         oss << "/NodeList/" << object->GetId() << "/$ns3::MobilityModel/CourseChange";
         std::cout << oss.str() << std::endl;
-        Config::ConnectWithoutContext(oss.str(), MakeBoundCallback(CollectCommData, myGymEnv));
+//        Config::ConnectWithoutContext(oss.str(), MakeBoundCallback(CollectCommData, myGymEnv));
     }
 
     // Force ADR
