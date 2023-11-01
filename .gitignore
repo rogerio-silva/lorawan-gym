@@ -5,3 +5,4 @@ subdir
 nested-subdir
 CMakeLists.txt
 cmake-build-debug
+.idea
