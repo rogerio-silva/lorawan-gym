@@ -50,38 +50,20 @@
 
 #include <iomanip>
 
-// Packet characterization
-#define PACKET_SIZE 400
 // QoS, Data rate and Delay
 #define MAX_RK 6835.94
 #define MIN_RK 183.11
-#define QOS_BOUND 1.6
-// UAVs deployment area
-#define H_POSITIONS 10
-#define V_POSITIONS 10
-// Deployment area
-#define AREA_HEIGHT 10000.0
-#define AREA_WIDTH 10000.0
-#define UAV_ALTITUDE 30.0
-#define MOVEMENT_STEP 1000.0
+
 
 using namespace ns3;
 using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("LoRaWAN-OpenAIGym");
 
-//enum ActionMovements
-//{
-//    MOVE_UP,
-//    MOVE_DOWN,
-//    MOVE_RIGHT,
-//    MOVE_LEFT,
-//    NO_MOVE
-//};
-//std::vector<enum ActionMovements> movements;
-
 Ptr<OpenGymInterface> openGym;
 Ptr<MobilityModel> mobility;
+uint32_t nDevices = 0;
+uint32_t nGateways = 0;
 uint32_t env_action = 0;
 uint32_t env_action_space_size = 4;
 bool env_isGameOver = false;
@@ -131,8 +113,6 @@ NodeContainer endDevices;
 NodeContainer gateways;
 ApplicationContainer applicationContainer;
 
-uint32_t nDevices = 0;
-uint32_t nGateways = 0;
 int pkt_noMoreReceivers = 0;
 int pkt_interfered = 0;
 int pkt_received = 0;
@@ -156,8 +136,7 @@ void CourseChangeDetection(std::string context, Ptr<const MobilityModel> model);
 void ScheduleNextStateRead();
 void ScheduleNextDataCollect();
 void TrackersReset();
-Ptr<ListPositionAllocator> EndDevicesPlacement(std::string filename);
-Ptr<ListPositionAllocator> GatewaysPlacement();
+Ptr<ListPositionAllocator> NodesPlacement(std::string filename);
 void DoSetInitialPositions();
 void FindNewPosition(uint32_t action);
 double PrintData();
@@ -180,7 +159,6 @@ main(int argc, char* argv[])
     uint32_t simSeed = 1;
     double reward = 0.0;
     uint32_t openGymPort = 5555;
-    uint32_t testArg = 0;
     bool up = true;
 
     CommandLine cmd;
@@ -197,6 +175,7 @@ main(int argc, char* argv[])
     cmd.AddValue("startZ", "UAVs Z start position. Default:0", startZPosition);
 
     cmd.Parse(argc, argv);
+    env_action_space_size = 4 * nGateways;
 
     if(verbose)
     {
@@ -205,7 +184,7 @@ main(int argc, char* argv[])
         NS_LOG_UNCOND("--openGymPort: " << openGymPort);
         NS_LOG_UNCOND("--envStepTime: " << envStepTime);
         NS_LOG_UNCOND("--seed: " << simSeed);
-        NS_LOG_UNCOND("--testArg: " << testArg);
+        NS_LOG_UNCOND("--envActionSpaceSize: " << env_action_space_size);
     }
     RngSeedManager::SetSeed(seed);
     RngSeedManager::SetRun(simSeed);
@@ -247,11 +226,10 @@ main(int argc, char* argv[])
      *  Create End Devices  *
      ************************/
     NS_LOG_INFO("Creating end devices...");
+    std::string cwd = get_current_dir_name();
     // Create a set of nodes
     Ptr<ListPositionAllocator> allocatorED =
-        EndDevicesPlacement("/home/rogerio/git/sim-res/"
-                            "datafile/devices/placement/"
-                            "endDevices_LNM_Placement_" +
+        NodesPlacement(cwd + "/data/ed/endDevices_LNM_Placement_" +
                             std::to_string(seed) + "s+" + std::to_string(nDevices) + "d.dat");
     endDevices.Create(nDevices);
     mobilityED.SetMobilityModel("ns3::ConstantPositionMobilityModel");
@@ -285,7 +263,10 @@ main(int argc, char* argv[])
      *********************/
     NS_LOG_INFO("Creating gateways...");
     gateways.Create(nGateways);
-    Ptr<ListPositionAllocator> gatewaysPositions = GatewaysPlacement();
+    std::string filename = cwd + "/data/gw/optGPlacement_" +
+                           std::to_string (seed) + "s_" + std::to_string (nGateways) + "x1Gv_" +
+                           std::to_string (nDevices) + "D.dat";
+    Ptr<ListPositionAllocator> gatewaysPositions = NodesPlacement(filename);
     mobilityGW.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     mobilityGW.SetPositionAllocator(gatewaysPositions);
     mobilityGW.Install(gateways);
@@ -370,12 +351,12 @@ main(int argc, char* argv[])
  * @return number of devices
  **/
 Ptr<ListPositionAllocator>
-EndDevicesPlacement(std::string filename)
+NodesPlacement(std::string filename)
 {
     double edX = 0.0;
     double edY = 0.0;
     double edZ = 0.0;
-    Ptr<ListPositionAllocator> allocatorED = CreateObject<ListPositionAllocator>();
+    Ptr<ListPositionAllocator> allocator = CreateObject<ListPositionAllocator>();
     const char* c = filename.c_str();
     // Get Devices position from File
     std::ifstream in_File(c);
@@ -387,23 +368,11 @@ EndDevicesPlacement(std::string filename)
     {
         while (in_File >> edX >> edY >> edZ)
         {
-            allocatorED->Add(Vector(edX, edY, edZ));
+            allocator->Add(Vector(edX, edY, edZ));
         }
         in_File.close();
     }
-    return allocatorED;
-}
-
-Ptr<ListPositionAllocator>
-GatewaysPlacement()
-{
-    NS_LOG_INFO("GP::Set initial UAVs positions at " << Simulator::Now());
-    Ptr<ListPositionAllocator> gwAllocator = CreateObject<ListPositionAllocator>();
-    for (uint i = 0; i < nGateways; i++)
-    {
-        gwAllocator->Add(Vector(startXPosition, startYPosition, startZPosition));
-    }
-    return gwAllocator;
+    return allocator;
 }
 
 /**
@@ -412,17 +381,12 @@ GatewaysPlacement()
  */
 
 void
-FindNewPosition(uint32_t action)
+FindNewPosition(uint32_t action, uint32_t uav_number)
 {
     NS_LOG_FUNCTION("FindNewPosition");
     Ptr<MobilityModel> gwMob;
-    for (auto j = gateways.Begin(); j != gateways.End(); j++)
-    {
-        Ptr<Node> object = *j;
-        Ptr<NetDevice> netDevice = object->GetDevice(0);
-        gwMob = (*j)->GetObject<MobilityModel>();
-        uav_position = gwMob->GetPosition();
-    }
+    gwMob = gateways.Get(uav_number)->GetObject<MobilityModel>();
+    uav_position = gwMob->GetPosition();
 
     // Find a new position from the new state obtained from the GYM
     Vector new_pos = uav_position;
@@ -819,10 +783,12 @@ ExecuteActions(Ptr<OpenGymDataContainer> action)
 {
     Ptr<OpenGymDiscreteContainer> discrete = DynamicCast<OpenGymDiscreteContainer>(action);
     env_action = discrete->GetValue();
+    uint32_t uav_number = env_action / 4;
+    env_action = env_action % nGateways;
     impossible_movement = false;
     if (env_action < env_action_space_size)
     {
-        FindNewPosition(env_action);
+        FindNewPosition(env_action, uav_number);
         ScheduleNextDataCollect();
         NS_LOG_INFO("MyExecuteActions: " << action);
     }

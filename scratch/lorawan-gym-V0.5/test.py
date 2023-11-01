@@ -63,7 +63,7 @@ steps = int(args.steps)
 
 port = 5555
 nDevices = 10
-nGateways = 1
+nGateways = 3
 startX = 5000
 startY = 4000
 startZ = 30
@@ -76,7 +76,7 @@ simArgs = {"--nDevices": nDevices,
            "--startX": startX,
            "--startY": startY,
            "--startZ": startZ}
-startSim = 1
+startSim = 0
 debug = 1
 
 env = ns3env.Ns3Env(port=port, startSim=startSim, simSeed=seed, simArgs=simArgs, debug=debug)
@@ -89,7 +89,7 @@ print("Action space: ", ac_space, ac_space.dtype)
 ## Q-Learning
 # Inicializando a "q-table"
 state_size = 121  # 11x11 (0..10000, 0..10000) Step: 1000
-action_size = 4  # 0: none, 1: up, 2: down, 3: left, 4: right
+action_size = 4 * nGateways # 0: up, 1: down, 2: left, 3: right, for each gateway = action%gateway_number
 qtable = np.zeros((state_size, action_size))
 
 # Hiperparâmetros
