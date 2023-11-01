@@ -3,5 +3,5 @@ opengym
 
 subdir
 nested-subdir
-CMake*
-cmake*
+CMakeLists.txt
+cmake-build-debug
