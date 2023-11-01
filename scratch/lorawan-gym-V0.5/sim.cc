@@ -217,7 +217,6 @@ main(int argc, char* argv[])
      ************************************/
     if (verbose)
     {
-        //        LogComponentEnable("EndDeviceStatus", ns3::LOG_LEVEL_ALL);
         LogComponentEnable("LoRaWAN-OpenAIGym", ns3::LOG_LEVEL_ALL);
     }
 
@@ -273,7 +272,7 @@ main(int argc, char* argv[])
     helper.Install(phyHelper, macHelper, endDevices);
 
     //     Connect trace sources
-    for (NodeContainer::Iterator j = endDevices.Begin(); j != endDevices.End(); ++j)
+    for (auto j = endDevices.Begin(); j != endDevices.End(); ++j)
     {
         Ptr<Node> node = *j;
         Ptr<LoraNetDevice> loraNetDevice = node->GetDevice(0)->GetObject<LoraNetDevice>();
@@ -296,7 +295,7 @@ main(int argc, char* argv[])
     macHelper.SetDeviceType(LorawanMacHelper::GW);
     helper.Install(phyHelper, macHelper, gateways);
 
-    for (NodeContainer::Iterator g = gateways.Begin(); g != gateways.End(); ++g)
+    for (auto g = gateways.Begin(); g != gateways.End(); ++g)
     {
         Ptr<Node> object = *g;
         Ptr<NetDevice> netDevice = object->GetDevice(0);
@@ -331,7 +330,6 @@ main(int argc, char* argv[])
     openGym->SetGetRewardCb(MakeCallback(&GetReward));
     openGym->SetGetExtraInfoCb(MakeCallback(&GetExtraInfo));
     openGym->SetExecuteActionsCb(MakeCallback(&ExecuteActions));
-    Simulator::Schedule(Seconds(applicationStop), &ScheduleNextStateRead);
 
     // Force ADR
     ns3::lorawan::LorawanMacHelper::SetSpreadingFactorsUp(endDevices, gateways, channel);
@@ -351,6 +349,8 @@ main(int argc, char* argv[])
     /*********************************************
      *  Install applications on the end devices  *
      *********************************************/
+    Simulator::Schedule(Seconds(applicationStop + 10), &ScheduleNextStateRead);
+
     ScheduleNextDataCollect();
     NS_LOG_INFO("Completed configuration");
 
@@ -406,22 +406,6 @@ GatewaysPlacement()
     return gwAllocator;
 }
 
-void
-DoSetInitialPositions()
-{
-    NS_LOG_INFO("DSI::Set initial UAVs positions at " << Simulator::Now());
-    for (NodeContainer::Iterator j = gateways.Begin(); j != gateways.End(); j++)
-    {
-        Ptr<Node> object = *j;
-        Ptr<NetDevice> netDevice = object->GetDevice(0);
-        Ptr<MobilityModel> gwMob = (*j)->GetObject<MobilityModel>();
-        Vector position = gwMob->GetPosition();
-        position = Vector(startXPosition, startYPosition, startZPosition);
-        gwMob->SetPosition(position);
-        uav_position = position;
-    }
-}
-
 /**
  * Find the new position of the node.
  * In case of area violation, a penalty is notified to the GYM
@@ -432,7 +416,7 @@ FindNewPosition(uint32_t action)
 {
     NS_LOG_FUNCTION("FindNewPosition");
     Ptr<MobilityModel> gwMob;
-    for (NodeContainer::Iterator j = gateways.Begin(); j != gateways.End(); j++)
+    for (auto j = gateways.Begin(); j != gateways.End(); j++)
     {
         Ptr<Node> object = *j;
         Ptr<NetDevice> netDevice = object->GetDevice(0);
@@ -516,7 +500,7 @@ PrintData()
     int numPackets = 0;
     int lostPackets = 0;
     int receivedPackets = 0;
-    for (std::map<Ptr<const Packet>, myPacketStatus>::iterator p = packetTracker.begin();
+    for (auto p = packetTracker.begin();
          p != packetTracker.end();
          ++p)
     {
@@ -581,17 +565,18 @@ PrintData()
     }
     // Gateways QoS
     mean_qos = sumQos / nDevices;
-    for (uint32_t i = 0; i < nDevices; ++i)
-    {
-        NS_LOG_INFO(i << " " << deviceSummarizedData[i][0] << " " << deviceSummarizedData[i][1]
-                      << " " << deviceSummarizedData[i][2] << " " << deviceSummarizedData[i][3]);
-    }
+
     if (isNaN(mean_qos))
     {
         NS_LOG_INFO("Does not meet QoS criteria!");
     }
     else
     {
+        for (uint32_t i = 0; i < nDevices; ++i)
+        {
+            NS_LOG_INFO(i << " " << deviceSummarizedData[i][0] << " " << deviceSummarizedData[i][1]
+                          << " " << deviceSummarizedData[i][2] << " " << deviceSummarizedData[i][3]);
+        }
         NS_LOG_INFO("Simulated QoS: " << mean_qos);
     }
     NS_LOG_INFO("Total: " << numPackets << " Sent: " << pkt_transmitted << " Lost: " << lostPackets
@@ -665,7 +650,7 @@ PacketReceptionCallback(Ptr<const Packet> packet, uint32_t systemId)
     LoraTag tag;
     packet->PeekPacketTag(tag);
 
-    std::map<Ptr<const Packet>, myPacketStatus>::iterator it = packetTracker.find(packet);
+    auto it = packetTracker.find(packet);
 
     if (it != packetTracker.end())
     {
@@ -691,7 +676,7 @@ void
 InterferenceCallback(Ptr<const Packet> packet, uint32_t systemId)
 {
     NS_LOG_INFO("A packet was lost because of interference at gateway " << systemId);
-    std::map<Ptr<const Packet>, myPacketStatus>::iterator it = packetTracker.find(packet);
+    auto it = packetTracker.find(packet);
     if ((*it).second.outcomes.size() > systemId - nDevices)
     {
         (*it).second.outcomes.at(systemId - nDevices) = _INTERFERED;
@@ -704,7 +689,7 @@ void
 NoMoreReceiversCallback(Ptr<const Packet> packet, uint32_t systemId)
 {
     NS_LOG_INFO("A packet was lost because there were no more receivers at gateway " << systemId);
-    std::map<Ptr<const Packet>, myPacketStatus>::iterator it = packetTracker.find(packet);
+    auto it = packetTracker.find(packet);
     if ((*it).second.outcomes.size() > systemId - nDevices)
     {
         (*it).second.outcomes.at(systemId - nDevices) = _NO_MORE_RECEIVERS;
@@ -717,7 +702,7 @@ void
 UnderSensitivityCallback(Ptr<const Packet> packet, uint32_t systemId)
 {
     NS_LOG_INFO("A packet arrived at the gateway under sensitivity" << systemId);
-    std::map<Ptr<const Packet>, myPacketStatus>::iterator it = packetTracker.find(packet);
+    auto it = packetTracker.find(packet);
     if ((*it).second.outcomes.size() > systemId - nDevices)
     {
         (*it).second.outcomes.at(systemId - nDevices) = _UNDER_SENSITIVITY;
@@ -741,7 +726,9 @@ CourseChangeDetection(std::string context, Ptr<const MobilityModel> model)
 void
 ScheduleNextStateRead()
 {
-    Simulator::Schedule(Seconds(applicationStop), &ScheduleNextStateRead);
+    Simulator::Schedule(Seconds(applicationStop + 100), &ScheduleNextStateRead);
+    applicationStart = applicationStop + 100;
+    applicationStop = applicationStart + envStepTime;
     openGym->NotifyCurrentState();
 }
 
@@ -751,14 +738,13 @@ ScheduleNextDataCollect()
     PeriodicSenderHelper periodicSenderHelper;
     periodicSenderHelper.SetPeriod(Seconds(applicationInterval));
     periodicSenderHelper.SetPacketSize(packetSize);
-    // TODO::Verify forwarder helper start and stop times;
+
     ForwarderHelper forHelper = ForwarderHelper();
     forHelper.Install(gateways);
     applicationContainer = periodicSenderHelper.Install(endDevices);
     applicationContainer.Start(Seconds(applicationStart));
     applicationContainer.Stop(Seconds(applicationStop));
-    applicationStart += envStepTime;
-    applicationStop += envStepTime;
+
     TrackersReset();
 }
 
@@ -816,8 +802,10 @@ std::string
 GetExtraInfo()
 {
     std::string env_info = "";
-    env_info = "UAV Position [" + std::to_string(uav_position.x) + ", " +
-               std::to_string(uav_position.y) + ", " + std::to_string(uav_position.z) + "]";
+    env_info = "[" + std::to_string(pkt_transmitted) +
+               ", " + std::to_string(pkt_received) +
+               ", " + std::to_string(applicationStart) +
+               ", " + std::to_string(applicationStop) + "]";
     if (impossible_movement)
     {
         env_info += "[impossible movement]";
@@ -850,8 +838,16 @@ GetObservation()
     };
 
     Ptr<OpenGymBoxContainer<uint32_t>> box = CreateObject<OpenGymBoxContainer<uint32_t>>(shape);
-    box->AddValue(pkt_transmitted);
-    box->AddValue(pkt_received);
+    for (auto g = gateways.Begin(); g != gateways.End(); ++g)
+    {
+        Ptr<Node> object = *g;
+        Ptr<NetDevice> netDevice = object->GetDevice(0);
+        mobility = netDevice->GetNode()->GetObject<MobilityModel>();
+        uav_position = mobility->GetPosition();
+        box->AddValue(uav_position.x);
+        box->AddValue(uav_position.y);
+        box->AddValue(uav_position.z);
+    }
     NS_LOG_INFO("MyGetObservation: " << box);
     return box;
 }

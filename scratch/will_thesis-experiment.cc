@@ -332,7 +332,7 @@ PrintDevicesData (std::string filename)
     {
       Ptr<Node> object = *j;
       Ptr<MobilityModel> position = object->GetObject<MobilityModel> ();
-      NS_ASSERT (position != 0);
+      NS_ASSERT (position != nullptr);
       Ptr<EndDeviceLorawanMac> mac = object->GetDevice (0)
                                          ->GetObject<LoraNetDevice> ()
                                          ->GetMac ()
@@ -470,7 +470,7 @@ main (int argc, char *argv[])
       // Get the device
       Ptr<NetDevice> netDevice = object->GetDevice (0);
       Ptr<LoraNetDevice> loraNetDevice = netDevice->GetObject<LoraNetDevice> ();
-      NS_ASSERT (loraNetDevice != 0);
+      NS_ASSERT (loraNetDevice != nullptr);
       Ptr<GatewayLoraPhy> gwPhy = loraNetDevice->GetPhy ()->GetObject<GatewayLoraPhy> ();
       // Global callbacks (every gateway)
       gwPhy->TraceConnectWithoutContext ("ReceivedPacket",
