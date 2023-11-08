@@ -1,5 +1,7 @@
+sandbox
 nr
 opengym
+contrib
 
 subdir
 nested-subdir
