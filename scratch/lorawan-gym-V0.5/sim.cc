@@ -28,6 +28,12 @@
  *   ©© © © ©                                X X                                /XXX\
  * Devices Lorawan                           UAV                              BS 5G/B5G
  * #####################################################################################
+ *
+ * UAVs aerial bases: Parameter <<startPositions>> of ns-3 simulation
+ *  1. UAVs starts in Aerial Bases and moves to the ideal position (still not implemented)
+ *  2. UAVs starts in optimal positions from optimization algorithm results
+ *  3. UAVs starts in the corners of the area (still not implemented)
+ *  4. UAVs starts in random positions (still not implemented)
  * */
 
 #include "ns3/box.h"
@@ -54,17 +60,18 @@
 #define MAX_RK 6835.94
 #define MIN_RK 183.11
 
-
 using namespace ns3;
 using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("LoRaWAN-OpenAIGym");
 
 Ptr<OpenGymInterface> openGym;
-Ptr<MobilityModel> mobility;
+// Ptr<MobilityModel> mobility;
+ApplicationContainer applicationContainer = ApplicationContainer();
 uint32_t nDevices = 0;
 uint32_t nGateways = 0;
 uint32_t env_action = 0;
+uint32_t uav_number = 0;
 uint32_t env_action_space_size = 4;
 bool env_isGameOver = false;
 double m_qos = 0.0;
@@ -73,14 +80,18 @@ double movementStep = 1000.0;
 double startXPosition = 0;
 double startYPosition = 0;
 double startZPosition = 0;
-Vector uav_position;
 double envStepTime = 600; // seconds, ns3gym env step time interval
 bool verbose = false;
+bool vcallbacks = false;
+bool vtime = false;
+bool vresults = false;
+bool vgym = false;
+bool vmodel = false;
 const int packetSize = 50;
-double applicationStart = 0; // 0.1 second after simulation start
+// double applicationStart = 0; // 0.1 second after simulation start
 double applicationInterval = 10;
-double applicationStop = 600; // 5 minutes
-double simulationStop = 600*10*50;
+// double applicationStop = 600; // 10 minutes
+double simulationStop = 600 * 10 * 50;
 bool impossible_movement = false;
 
 enum PacketOutcome
@@ -111,13 +122,19 @@ std::map<Ptr<const Packet>, myPacketStatus> packetTracker;
 
 NodeContainer endDevices;
 NodeContainer gateways;
-ApplicationContainer applicationContainer;
+Ptr<LoraChannel> channel;
 
+// Results computed from trace sources
 int pkt_noMoreReceivers = 0;
 int pkt_interfered = 0;
 int pkt_received = 0;
 int pkt_underSensitivity = 0;
 int pkt_transmitted = 0;
+
+// Results computed from packet list
+int numPackets = 0;
+int lostPackets = 0;
+int receivedPackets = 0;
 
 /***********************
  * Callback Functions  *
@@ -140,6 +157,7 @@ Ptr<ListPositionAllocator> NodesPlacement(std::string filename);
 void DoSetInitialPositions();
 void FindNewPosition(uint32_t action);
 double PrintData();
+bool GetCollisionStatus(uint32_t uavNumber, Vector newPosition);
 
 /**********************
  * OPENGYM Functions  *
@@ -155,7 +173,6 @@ bool GetGameOver();
 int
 main(int argc, char* argv[])
 {
-    uint32_t seed = 1;
     uint32_t simSeed = 1;
     double reward = 0.0;
     uint32_t openGymPort = 5555;
@@ -166,46 +183,49 @@ main(int argc, char* argv[])
     cmd.AddValue("nDevices", "Number of end devices to include in the simulation", nDevices);
     cmd.AddValue("nGateways", "Number of gateways to include in the simulation", nGateways);
     cmd.AddValue("verbose", "Whether to print output or not", verbose);
+    cmd.AddValue("vgym", "Whether to print Gym output or not", vgym);
+    cmd.AddValue("vresults", "Whether to print results or not", vresults);
+    cmd.AddValue("vtime", "Whether to print time control or not", vtime);
+    cmd.AddValue("vcallbacks", "Whether to print callbacks or not", vcallbacks);
+    cmd.AddValue("vmodel", "Whether to print ns-3 modeling messages or not", vmodel);
     cmd.AddValue("up", "Spread Factor UP", up);
     cmd.AddValue("simSeed", "Seed", simSeed);
     cmd.AddValue("reward", "Initial Reward", reward);
     cmd.AddValue("step", "UAVs movement step. Default:1000", movementStep);
-    cmd.AddValue("startX", "UAVs X start position. Default:0", startXPosition);
-    cmd.AddValue("startY", "UAVs Y start position. Default:0", startYPosition);
-    cmd.AddValue("startZ", "UAVs Z start position. Default:0", startZPosition);
 
     cmd.Parse(argc, argv);
     env_action_space_size = 4 * nGateways;
 
-    if(verbose)
+    if (vgym)
     {
-        NS_LOG_UNCOND("Ns3Env parameters:");
-        NS_LOG_UNCOND("--simulationTime: " << simulationStop);
-        NS_LOG_UNCOND("--openGymPort: " << openGymPort);
-        NS_LOG_UNCOND("--envStepTime: " << envStepTime);
-        NS_LOG_UNCOND("--seed: " << simSeed);
-        NS_LOG_UNCOND("--envActionSpaceSize: " << env_action_space_size);
+        NS_LOG_INFO("Ns3Env parameters:");
+        NS_LOG_INFO("--simulationTime: " << simulationStop);
+        NS_LOG_INFO("--openGymPort: " << openGymPort);
+        NS_LOG_INFO("--envStepTime: " << envStepTime);
+        NS_LOG_INFO("--seed: " << simSeed);
+        NS_LOG_INFO("--envActionSpaceSize: " << env_action_space_size);
     }
-    RngSeedManager::SetSeed(seed);
-    RngSeedManager::SetRun(simSeed);
+    RngSeedManager::SetSeed(simSeed);
 
     Config::SetDefault("ns3::EndDeviceLorawanMac::DRControl", BooleanValue(true));
 
     /************************************
      *  Logger settings                 *
      ************************************/
+
     if (verbose)
     {
         LogComponentEnable("LoRaWAN-OpenAIGym", ns3::LOG_LEVEL_ALL);
+        vtime = vgym = vresults = vcallbacks = vmodel = true;
     }
 
     /************************
      *  Create the channel  *
      ************************/
-    Ptr<LoraChannel> channel;
     MobilityHelper mobilityED;
     MobilityHelper mobilityGW;
-    NS_LOG_INFO("Setting up channel...");
+    if (vmodel)
+        NS_LOG_INFO("Setting up channel...");
     Ptr<PropagationDelayModel> delay = CreateObject<ConstantSpeedPropagationDelayModel>();
     Ptr<LogDistancePropagationLossModel> loss = CreateObject<LogDistancePropagationLossModel>();
     loss->SetPathLossExponent(3.76);
@@ -215,7 +235,8 @@ main(int argc, char* argv[])
     /************************
      *  Create the helpers  *
      ************************/
-    NS_LOG_INFO("Setting up helpers...");
+    if (vmodel)
+        NS_LOG_INFO("Setting up helpers...");
     LoraPhyHelper phyHelper = LoraPhyHelper();
     phyHelper.SetChannel(channel);
     LorawanMacHelper macHelper = LorawanMacHelper();
@@ -225,12 +246,13 @@ main(int argc, char* argv[])
     /************************
      *  Create End Devices  *
      ************************/
-    NS_LOG_INFO("Creating end devices...");
-    std::string cwd = get_current_dir_name();
+    if (vmodel)
+        NS_LOG_INFO("Creating end devices...");
+    std::string cwd = "/home/rogerio/git/ns-allinone-3.40/ns-3.40/scratch/lorawan-gym-V0.5";
+    std::string filename = cwd + "/data/ed/endDevices_LNM_Placement_" + std::to_string(simSeed) +
+                           "s+" + std::to_string(nDevices) + "d.dat";
     // Create a set of nodes
-    Ptr<ListPositionAllocator> allocatorED =
-        NodesPlacement(cwd + "/data/ed/endDevices_LNM_Placement_" +
-                            std::to_string(seed) + "s+" + std::to_string(nDevices) + "d.dat");
+    Ptr<ListPositionAllocator> allocatorED = NodesPlacement(filename);
     endDevices.Create(nDevices);
     mobilityED.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     mobilityED.SetPositionAllocator(allocatorED);
@@ -261,12 +283,14 @@ main(int argc, char* argv[])
     /*********************
      *  Create Gateways  *
      *********************/
-    NS_LOG_INFO("Creating gateways...");
-    gateways.Create(nGateways);
-    std::string filename = cwd + "/data/gw/optGPlacement_" +
-                           std::to_string (seed) + "s_" + std::to_string (nGateways) + "x1Gv_" +
-                           std::to_string (nDevices) + "D.dat";
+    if (vmodel)
+        NS_LOG_INFO("Creating gateways...");
+
+    filename = cwd + "/data/gw/optGPlacement_" + std::to_string(simSeed) + "s_100x1Gv_" +
+               std::to_string(nDevices) + "D.dat";
     Ptr<ListPositionAllocator> gatewaysPositions = NodesPlacement(filename);
+    nGateways = gatewaysPositions->GetSize();
+    gateways.Create(nGateways);
     mobilityGW.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     mobilityGW.SetPositionAllocator(gatewaysPositions);
     mobilityGW.Install(gateways);
@@ -280,8 +304,6 @@ main(int argc, char* argv[])
     {
         Ptr<Node> object = *g;
         Ptr<NetDevice> netDevice = object->GetDevice(0);
-        mobility = netDevice->GetNode()->GetObject<MobilityModel>();
-        uav_position = mobility->GetPosition();
         Ptr<LoraNetDevice> loraNetDevice = netDevice->GetObject<LoraNetDevice>();
         Ptr<GatewayLoraPhy> gwPhy = loraNetDevice->GetPhy()->GetObject<GatewayLoraPhy>();
         // Packets tracing callbacks
@@ -297,7 +319,8 @@ main(int argc, char* argv[])
         oss.str("");
         oss << "/NodeList/" << object->GetId() << "/$ns3::MobilityModel/CourseChange";
         Config::Connect(oss.str(), MakeCallback(&CourseChangeDetection));
-        NS_LOG_INFO("CallBack Connected on: " << oss.str());
+        if (vcallbacks)
+            NS_LOG_INFO("CallBack Connected on: " << oss.str());
     }
 
     /************************************
@@ -328,21 +351,24 @@ main(int argc, char* argv[])
     nsHelper.Install(networkServer);
 
     /*********************************************
-     *  Install applications on the end devices  *
+     *  Schedule applications                    *
      *********************************************/
-    Simulator::Schedule(Seconds(applicationStop + 10), &ScheduleNextStateRead);
 
+    Simulator::Schedule(Seconds(700), &ScheduleNextStateRead);
     ScheduleNextDataCollect();
-    NS_LOG_INFO("Completed configuration");
+    if (vmodel)
+        NS_LOG_INFO("Completed configuration");
 
     /****************
      *  Simulation  *
      ****************/
     Simulator::Run();
-    NS_LOG_INFO("Computing performance metrics...");
+    if (vmodel)
+        NS_LOG_INFO("Computing performance metrics...");
     openGym->NotifySimulationEnd();
     Simulator::Destroy();
-    NS_LOG_INFO("Simulation finished");
+    if (vmodel)
+        NS_LOG_INFO("Simulation finished");
 }
 
 /**
@@ -362,7 +388,8 @@ NodesPlacement(std::string filename)
     std::ifstream in_File(c);
     if (!in_File)
     {
-        NS_LOG_INFO("Could not open the file - '" << filename << "'");
+        if (vmodel)
+            NS_LOG_INFO("Could not open the file - '" << filename << "'");
     }
     else
     {
@@ -381,12 +408,11 @@ NodesPlacement(std::string filename)
  */
 
 void
-FindNewPosition(uint32_t action, uint32_t uav_number)
+FindNewPosition(uint32_t action, uint32_t uavNumber)
 {
-    NS_LOG_FUNCTION("FindNewPosition");
     Ptr<MobilityModel> gwMob;
-    gwMob = gateways.Get(uav_number)->GetObject<MobilityModel>();
-    uav_position = gwMob->GetPosition();
+    gwMob = gateways.Get(uavNumber)->GetObject<MobilityModel>();
+    Vector uav_position = gwMob->GetPosition();
 
     // Find a new position from the new state obtained from the GYM
     Vector new_pos = uav_position;
@@ -435,10 +461,46 @@ FindNewPosition(uint32_t action, uint32_t uav_number)
             new_pos = Vector(uav_position.x + movementStep, uav_position.y, uav_position.z);
         }
     }
-    if (impossible_movement) // notify penalty to GYM
-        NS_LOG_INFO("Movement is not allowed; the node position has not changed!");
-    gwMob->SetPosition(new_pos); // the movement
-    uav_position = new_pos;
+    if (impossible_movement)
+    {
+        // Movement to outside the area is not allowed
+        if (vmodel)
+        {
+            NS_LOG_INFO("Movement is not allowed; the node position has not changed!");
+        }
+    }
+    else
+    {
+        // Collisions are not allowed
+        if (!GetCollisionStatus(uavNumber, new_pos))
+        {
+            gwMob->SetPosition(new_pos); // the movement
+        }
+        else
+        {
+            NS_LOG_INFO("A possible collision was detected; the node position has not changed!");
+        }
+    }
+}
+
+bool
+GetCollisionStatus(uint32_t uavNumber, Vector newPosition)
+{
+    for (auto g = gateways.Begin(); g != gateways.End(); ++g)
+    {
+        Ptr<Node> object = *g;
+        Ptr<NetDevice> netDevice = object->GetDevice(0);
+        Ptr<MobilityModel> mobility = netDevice->GetNode()->GetObject<MobilityModel>();
+        Vector uav_position = mobility->GetPosition();
+        if (uavNumber != object->GetId() - nDevices)
+        {
+            if (uav_position == newPosition)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 double
@@ -450,7 +512,8 @@ PrintData()
     std::vector<std::vector<std::vector<double>>> deviceSimulatedData;
     double sumQos = 0.0;
     double mean_qos = 0.0;
-    NS_LOG_INFO("Collecting package data!");
+    if (vresults)
+        NS_LOG_INFO("Collecting package data!");
 
     deviceSimulatedData.reserve(nDevices);
     for (uint32_t i = 0; i < nDevices; ++i)
@@ -459,14 +522,10 @@ PrintData()
     }
 
     lorawan::LoraTag tag;
-    NS_LOG_INFO("Devices Simulated Data...");
+    if (vresults)
+        NS_LOG_UNCOND("Devices Simulated Results...");
 
-    int numPackets = 0;
-    int lostPackets = 0;
-    int receivedPackets = 0;
-    for (auto p = packetTracker.begin();
-         p != packetTracker.end();
-         ++p)
+    for (auto p = packetTracker.begin(); p != packetTracker.end(); ++p)
     {
         numPackets += 1;
         (*p).second.packet->PeekPacketTag(tag);
@@ -499,7 +558,8 @@ PrintData()
     sumQos = 0.0;
     for (uint32_t devID = 0; devID < nDevices; ++devID)
     {
-        if(deviceSimulatedData[devID][0].empty()) {
+        if (deviceSimulatedData[devID][0].empty())
+        {
             continue;
         }
         double dk = 0;
@@ -507,6 +567,8 @@ PrintData()
         double sf = deviceSimulatedData[devID][0][0];
         double qos = 0;
         int qtd = 0;
+        // depurar aqui prá contornar o SIGSEGV
+        // O VETOR NÃO TÁ COMPLETO
         for (unsigned int i = 0; i < deviceSimulatedData[devID][0].size(); ++i)
         {
             if (deviceSimulatedData[devID][2].at(i) > 0.0)
@@ -529,23 +591,42 @@ PrintData()
     }
     // Gateways QoS
     mean_qos = sumQos / nDevices;
-
-    if (isNaN(mean_qos))
+    if (deviceSummarizedData.size() < nDevices)
     {
-        NS_LOG_INFO("Does not meet QoS criteria!");
+        if (vresults)
+            NS_LOG_UNCOND("There are unserved devices!");
+        return -1;
     }
     else
     {
         for (uint32_t i = 0; i < nDevices; ++i)
         {
-            NS_LOG_INFO(i << " " << deviceSummarizedData[i][0] << " " << deviceSummarizedData[i][1]
-                          << " " << deviceSummarizedData[i][2] << " " << deviceSummarizedData[i][3]);
+            if (vresults)
+                NS_LOG_UNCOND(i << " " << deviceSummarizedData[i][0] << " "
+                                << deviceSummarizedData[i][1] << " " << deviceSummarizedData[i][2]
+                                << " " << deviceSummarizedData[i][3]);
         }
-        NS_LOG_INFO("Simulated QoS: " << mean_qos);
     }
-    NS_LOG_INFO("Total: " << numPackets << " Sent: " << pkt_transmitted << " Lost: " << lostPackets
-                          << " Received: " << receivedPackets
-                          << " QoS: " << (isNaN(mean_qos) ? 0.0 : mean_qos));
+    if (isNaN(mean_qos)) // || mean_qos < QOS_THRESHOLD)
+    {
+        if (vresults)
+            NS_LOG_UNCOND("Does not meet QoS criteria!");
+    }
+    else
+    {
+        if (vresults)
+            NS_LOG_UNCOND("Simulated QoS: " << mean_qos);
+    }
+    if (vresults)
+        NS_LOG_UNCOND("Summary: " << numPackets << " Sent: " << pkt_transmitted
+                                  << " Lost: " << lostPackets << " Received: " << receivedPackets
+                                  << " QoS: " << (isNaN(mean_qos) ? 0.0 : mean_qos));
+    if (vresults)
+        NS_LOG_UNCOND("Callback results: Tx " << pkt_transmitted << " Rx " << pkt_received
+                                              << " UnderSensitivity " << pkt_underSensitivity
+                                              << " NoMoreReceivers " << pkt_noMoreReceivers
+                                              << " Interfered " << pkt_interfered);
+
     return mean_qos;
 }
 
@@ -590,7 +671,9 @@ CheckReceptionByAllGWsComplete(std::map<Ptr<const Packet>, myPacketStatus>::iter
 void
 TransmissionCallback(Ptr<const Packet> packet, uint32_t systemId)
 {
-    NS_LOG_INFO("Transmitted a packet from device " << systemId);
+    if (vcallbacks)
+        NS_LOG_INFO("Transmitted a packet from device " << systemId << " at "
+                                                        << Simulator::Now().GetSeconds());
     LoraTag tag;
     packet->PeekPacketTag(tag);
 
@@ -610,7 +693,9 @@ void
 PacketReceptionCallback(Ptr<const Packet> packet, uint32_t systemId)
 {
     // Remove the successfully received packet from the list of sent ones
-    NS_LOG_INFO("A packet was successfully received at gateway " << systemId);
+    if (vcallbacks)
+        NS_LOG_INFO("A packet was successfully received at gateway "
+                    << systemId << " at " << Simulator::Now().GetSeconds());
     LoraTag tag;
     packet->PeekPacketTag(tag);
 
@@ -618,7 +703,7 @@ PacketReceptionCallback(Ptr<const Packet> packet, uint32_t systemId)
 
     if (it != packetTracker.end())
     {
-        if ((*it).second.outcomes.size() > systemId - nDevices)
+        if ((*it).first == packet)
         {
             (*it).second.outcomes.at(systemId - nDevices) = _RECEIVED;
             (*it).second.outcomeNumber += 1;
@@ -639,22 +724,27 @@ PacketReceptionCallback(Ptr<const Packet> packet, uint32_t systemId)
 void
 InterferenceCallback(Ptr<const Packet> packet, uint32_t systemId)
 {
-    NS_LOG_INFO("A packet was lost because of interference at gateway " << systemId);
+    if (vcallbacks)
+        NS_LOG_INFO("A packet was lost because of interference at gateway "
+                    << systemId << " at " << Simulator::Now().GetSeconds());
     auto it = packetTracker.find(packet);
-    if ((*it).second.outcomes.size() > systemId - nDevices)
+    if ((*it).first == packet)
     {
         (*it).second.outcomes.at(systemId - nDevices) = _INTERFERED;
         (*it).second.outcomeNumber += 1;
+        CheckReceptionByAllGWsComplete(it);
     }
-    CheckReceptionByAllGWsComplete(it);
 }
 
 void
 NoMoreReceiversCallback(Ptr<const Packet> packet, uint32_t systemId)
 {
-    NS_LOG_INFO("A packet was lost because there were no more receivers at gateway " << systemId);
+    if (vcallbacks)
+        NS_LOG_INFO("A packet was lost because there were no more receivers at gateway "
+                    << systemId << " at " << Simulator::Now().GetSeconds());
     auto it = packetTracker.find(packet);
-    if ((*it).second.outcomes.size() > systemId - nDevices)
+
+    if ((*it).first == packet)
     {
         (*it).second.outcomes.at(systemId - nDevices) = _NO_MORE_RECEIVERS;
         (*it).second.outcomeNumber += 1;
@@ -665,22 +755,25 @@ NoMoreReceiversCallback(Ptr<const Packet> packet, uint32_t systemId)
 void
 UnderSensitivityCallback(Ptr<const Packet> packet, uint32_t systemId)
 {
-    NS_LOG_INFO("A packet arrived at the gateway under sensitivity" << systemId);
+    if (vcallbacks)
+        NS_LOG_INFO("A packet arrived at the gateway " << systemId << " under sensitivity."
+                                                       << " at " << Simulator::Now().GetSeconds());
     auto it = packetTracker.find(packet);
-    if ((*it).second.outcomes.size() > systemId - nDevices)
+    if ((*it).first == packet)
     {
         (*it).second.outcomes.at(systemId - nDevices) = _UNDER_SENSITIVITY;
         (*it).second.outcomeNumber += 1;
+        CheckReceptionByAllGWsComplete(it);
     }
-    CheckReceptionByAllGWsComplete(it);
 }
 
 void
 CourseChangeDetection(std::string context, Ptr<const MobilityModel> model)
 {
-    uav_position = model->GetPosition();
-    NS_LOG_INFO(context << " x = " << uav_position.x << ", y = " << uav_position.y);
-    // openGym->NotifySimulationEnd();
+    Vector uav_position = model->GetPosition();
+    if (vcallbacks)
+        NS_LOG_INFO(context << " x = " << uav_position.x << ", y = " << uav_position.y
+                            << ", z = " << uav_position.z);
 }
 
 /**
@@ -690,26 +783,28 @@ CourseChangeDetection(std::string context, Ptr<const MobilityModel> model)
 void
 ScheduleNextStateRead()
 {
-    Simulator::Schedule(Seconds(applicationStop + 100), &ScheduleNextStateRead);
-    applicationStart = applicationStop + 100;
-    applicationStop = applicationStart + envStepTime;
+    if (vtime)
+        NS_LOG_INFO("NowNSR: " << Simulator::Now().GetSeconds());
+    Simulator::Schedule(Seconds(700), &ScheduleNextStateRead);
     openGym->NotifyCurrentState();
 }
 
 void
 ScheduleNextDataCollect()
 {
+    if (vtime)
+        NS_LOG_INFO("NowNDC: " << Simulator::Now().GetSeconds());
+    TrackersReset();
     PeriodicSenderHelper periodicSenderHelper;
     periodicSenderHelper.SetPeriod(Seconds(applicationInterval));
     periodicSenderHelper.SetPacketSize(packetSize);
-
     ForwarderHelper forHelper = ForwarderHelper();
     forHelper.Install(gateways);
     applicationContainer = periodicSenderHelper.Install(endDevices);
-    applicationContainer.Start(Seconds(applicationStart));
-    applicationContainer.Stop(Seconds(applicationStop));
-
-    TrackersReset();
+    applicationContainer.Start(Seconds(0));
+    applicationContainer.Stop(Seconds(600));
+    // Force ADR
+    ns3::lorawan::LorawanMacHelper::SetSpreadingFactorsUp(endDevices, gateways, channel);
 }
 
 void
@@ -721,6 +816,10 @@ TrackersReset()
     pkt_interfered = 0;
     pkt_noMoreReceivers = 0;
     pkt_underSensitivity = 0;
+    numPackets = 0;
+    lostPackets = 0;
+    receivedPackets = 0;
+    //    if (vtime) NS_LOG_INFO("Trackers Reseted!");
 }
 
 Ptr<OpenGymSpace>
@@ -728,7 +827,11 @@ GetActionSpace()
 {
     /**
      * The action space contains four expected actions: move up,
-     * move down, move left, and move right.
+     * move down, move left, and move right and the UAV number.
+     * The UAV number is used to identify the UAV that will execute the action.
+     * Action number represents the uav number * 4 + the action.
+     * Ex: 11 = 2 * 4 + 3 = UAV 2 move right
+     * The action space is represented by the following enum:
      * enum ActionMovements{
      *                      MOVE_UP,
      *                      MOVE_DOWN,
@@ -736,17 +839,19 @@ GetActionSpace()
      *                      MOVE_LEFT
      * }
      * **/
-    NS_LOG_FUNCTION("GetActionSpace");
+    if (vgym)
+        NS_LOG_FUNCTION("GetActionSpace");
     Ptr<OpenGymDiscreteSpace> space = CreateObject<OpenGymDiscreteSpace>(env_action_space_size);
-    NS_LOG_INFO("GetActionSpace: " << space);
-    NS_LOG_INFO(Simulator::Now().GetSeconds());
+    if (vgym)
+        NS_LOG_INFO("GetActionSpace: " << space << " Time: " << Simulator::Now().GetSeconds());
     return space;
 }
 
 bool
 GetGameOver()
 {
-    NS_LOG_INFO("MyGetGameOver: " << env_isGameOver);
+    if (vgym)
+        NS_LOG_INFO("MyGetGameOver: " << env_isGameOver);
     return env_isGameOver;
 }
 
@@ -758,7 +863,8 @@ GetReward()
         m_qos = PrintData();
         m_qos = (impossible_movement) ? -2 : ((isNaN(m_qos) || (m_qos < 0)) ? -1 : m_qos);
     }
-    NS_LOG_INFO("MyGetReward: " << m_qos);
+    if (vgym)
+        NS_LOG_INFO("MyGetReward: " << m_qos);
     return m_qos;
 }
 
@@ -766,15 +872,14 @@ std::string
 GetExtraInfo()
 {
     std::string env_info = "";
-    env_info = "[" + std::to_string(pkt_transmitted) +
-               ", " + std::to_string(pkt_received) +
-               ", " + std::to_string(applicationStart) +
-               ", " + std::to_string(applicationStop) + "]";
+    env_info = "[" + std::to_string(numPackets) + ", " + std::to_string(receivedPackets) + ", " +
+               std::to_string(lostPackets) + "]";
     if (impossible_movement)
     {
         env_info += "[impossible movement]";
     }
-    NS_LOG_INFO("MyGetExtraInfo: " << env_info);
+    if (vgym)
+        NS_LOG_INFO("MyGetExtraInfo: " << env_info);
     return env_info;
 }
 
@@ -783,15 +888,14 @@ ExecuteActions(Ptr<OpenGymDataContainer> action)
 {
     Ptr<OpenGymDiscreteContainer> discrete = DynamicCast<OpenGymDiscreteContainer>(action);
     env_action = discrete->GetValue();
-    uint32_t uav_number = env_action / 4;
-    env_action = env_action % nGateways;
+    uav_number = env_action / 4;
+    env_action = env_action % 4;
     impossible_movement = false;
-    if (env_action < env_action_space_size)
-    {
-        FindNewPosition(env_action, uav_number);
-        ScheduleNextDataCollect();
-        NS_LOG_INFO("MyExecuteActions: " << action);
-    }
+    FindNewPosition(env_action, uav_number);
+    ScheduleNextDataCollect();
+    if (vgym)
+        NS_LOG_INFO("MyExecuteAction: [" << uav_number << ", " << env_action
+                                         << "] Time: " << Simulator::Now().GetSeconds());
     return true;
 }
 
@@ -808,13 +912,14 @@ GetObservation()
     {
         Ptr<Node> object = *g;
         Ptr<NetDevice> netDevice = object->GetDevice(0);
-        mobility = netDevice->GetNode()->GetObject<MobilityModel>();
-        uav_position = mobility->GetPosition();
+        Ptr<MobilityModel> mobility = netDevice->GetNode()->GetObject<MobilityModel>();
+        Vector uav_position = mobility->GetPosition();
         box->AddValue(uav_position.x);
         box->AddValue(uav_position.y);
         box->AddValue(uav_position.z);
     }
-    NS_LOG_INFO("MyGetObservation: " << box);
+    if (vgym)
+        NS_LOG_INFO("MyGetObservation: " << box);
     return box;
 }
 
@@ -829,6 +934,7 @@ GetObservationSpace()
     float high = 10000.0;
     std::string dtype = TypeNameGet<uint32_t>();
     Ptr<OpenGymBoxSpace> box = CreateObject<OpenGymBoxSpace>(low, high, shape, dtype);
-    NS_LOG_INFO("MyGetObservationSpace: " << box);
+    if (vgym)
+        NS_LOG_INFO("MyGetObservationSpace: " << box);
     return box;
 }
